@@ -8,7 +8,7 @@ from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework import status
-#from django.shortcuts import render_to_response
+from django.shortcuts import render_to_response
 from django.template import RequestContext
 from django_filters.rest_framework import DjangoFilterBackend
 
@@ -121,9 +121,40 @@ class Session(APIView):
 
 class Events(APIView):
     permission_classes = (AllowAny,)
-    parser_classes = (parsers.JSONParser,parsers.FormParser)
+    parser_classes = (parsers.JSONParser, parsers.FormParser)
     renderer_classes = (renderers.JSONRenderer, )
 
+    def get(self, request, format=None):
+        events = Event.objects.all()
+        json_data = serializers.serialize('json', events)
+        content = {'events': json_data}
+        return HttpResponse(json_data, content_type='json')
+
+    def post(self, request, *args, **kwargs):
+        print 'REQUEST DATA'
+        print str(request.data)
+
+        eventtype = request.data.get('eventtype')
+        timestamp = int(request.data.get('timestamp'))
+        userid = request.data.get('userid')
+        requestor = request.META['REMOTE_ADDR']
+
+        newEvent = Event(
+            eventtype=eventtype,
+            timestamp=datetime.datetime.fromtimestamp(timestamp/1000, pytz.utc),
+            userid=userid,
+            requestor=requestor
+        )
+
+        try:
+            newEvent.clean_fields()
+        except ValidationError as e:
+            print e
+            return Response({'success':False, 'error':e}, status=status.HTTP_400_BAD_REQUEST)
+
+        newEvent.save()
+        print 'New Event Logged from: ' + requestor
+        return Response({'success': True}, status=status.HTTP_200_OK)
 
 class ActivateIFTTT(APIView):
     permission_classes = (AllowAny,)
